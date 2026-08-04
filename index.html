@@ -500,6 +500,45 @@ function checkWindow(){
   }
 }
 
+/* ============ SAMBUTAN SUARA ============ */
+const WELCOME_TEXT = "Selamat datang di pangkalan tabung Usaha Bersama";
+let _spoke = false;
+
+function idVoice(){
+  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+  return vs.find(v => v.lang === "id-ID")
+      || vs.find(v => (v.lang||"").toLowerCase().indexOf("id") === 0)
+      || null;
+}
+
+function speakWelcome(){
+  if(_spoke) return;
+  if(!("speechSynthesis" in window)) return;
+  const v = idVoice();
+  if(!v && speechSynthesis.getVoices().length === 0){
+    speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; speakWelcome(); };
+    return;
+  }
+  try{
+    const u = new SpeechSynthesisUtterance(WELCOME_TEXT);
+    u.lang = "id-ID"; u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
+    if(v) u.voice = v;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    _spoke = true;
+  }catch(e){}
+}
+
+/* Browser memblokir suara sebelum ada interaksi.
+   Coba langsung; kalau diblokir, jalan di sentuhan pertama. */
+function armWelcome(){
+  const go = () => { speakWelcome(); if(_spoke) off(); };
+  const evs = ["pointerdown","touchstart","keydown","scroll"];
+  const off = () => evs.forEach(e => window.removeEventListener(e, go));
+  evs.forEach(e => window.addEventListener(e, go, {passive:true}));
+  setTimeout(speakWelcome, 350);
+}
+
 /* ============ INIT ============ */
 $("#maxQtyLbl").textContent = MAX_QTY;
 renderNames();
@@ -507,6 +546,7 @@ renderAreas();
 renderCyls();
 renderAll();
 checkWindow();
+armWelcome();
 </script>
 </body>
 </html>
