@@ -59,6 +59,12 @@ button{font-family:inherit}
 <body>
 <div id="root" style="font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#111827;line-height:1.5;background:#F4F5F2;min-height:100vh;padding-bottom:132px">
 
+<button id="voiceBtn" type="button" aria-label="Putar suara sambutan"
+  style="position:fixed;top:calc(12px + env(safe-area-inset-top));right:13px;z-index:80;display:flex;align-items:center;gap:6px;height:36px;padding:0 13px 0 10px;border:1px solid rgba(255,255,255,.22);border-radius:18px;background:rgba(11,59,33,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 3px 12px rgba(0,0,0,.22);color:#fff;font:600 .76rem/1 'Plus Jakarta Sans',system-ui,sans-serif;letter-spacing:.01em;cursor:pointer;opacity:.82;transition:opacity .2s,transform .12s" onmousedown="this.style.transform='scale(.94)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(.94)'" ontouchend="this.style.transform=''">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.6 8.6a4.8 4.8 0 0 1 0 6.8"/><path d="M18.9 5.2a9.5 9.5 0 0 1 0 13.6"/></svg>
+  <span>Sambutan</span>
+</button>
+
 <!-- ============ FORM VIEW ============ -->
 <div id="formView">
   <header style="position:relative;overflow:hidden;background:#0B3B21;color:#fff;border-radius:0 0 30px 30px">
@@ -502,41 +508,63 @@ function checkWindow(){
 
 /* ============ SAMBUTAN SUARA ============ */
 const WELCOME_TEXT = "Selamat datang di pangkalan tabung Usaha Bersama";
-let _spoke = false;
+let _spoke = false, _lastTry = 0;
 
 function idVoice(){
   const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-  return vs.find(v => v.lang === "id-ID")
-      || vs.find(v => (v.lang||"").toLowerCase().indexOf("id") === 0)
+  const norm = s => (s||"").replace("_","-").toLowerCase();
+  return vs.find(v => norm(v.lang) === "id-id")
+      || vs.find(v => norm(v.lang).indexOf("id") === 0)
       || null;
 }
 
-function speakWelcome(){
-  if(_spoke) return;
+/* PENTING: _spoke hanya jadi true kalau suaranya BENAR-BENAR mulai bunyi
+   (lewat onstart). Kalau browser memblokir, kita masih boleh coba lagi. */
+function speakWelcome(force){
+  if(_spoke && !force) return;
   if(!("speechSynthesis" in window)) return;
-  const v = idVoice();
-  if(!v && speechSynthesis.getVoices().length === 0){
-    speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; speakWelcome(); };
-    return;
-  }
+  const synth = window.speechSynthesis;
+  const now = Date.now();
+  if(!force && now - _lastTry < 1200) return;
+  _lastTry = now;
+  if(synth.speaking || synth.pending) return;
   try{
     const u = new SpeechSynthesisUtterance(WELCOME_TEXT);
     u.lang = "id-ID"; u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
-    if(v) u.voice = v;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
-    _spoke = true;
+    const v = idVoice(); if(v) u.voice = v;
+    u.onstart = () => { _spoke = true; voiceBtnState("on"); };
+    u.onend   = () => voiceBtnState("idle");
+    u.onerror = () => voiceBtnState("idle");
+    synth.speak(u);
+    if(synth.paused) synth.resume();
   }catch(e){}
 }
 
-/* Browser memblokir suara sebelum ada interaksi.
-   Coba langsung; kalau diblokir, jalan di sentuhan pertama. */
+function voiceBtnState(s){
+  const b = document.getElementById("voiceBtn");
+  if(!b) return;
+  b.style.opacity = (s === "on") ? "1" : ".82";
+}
+
+/* Browser memblokir suara sebelum ada interaksi pengguna.
+   Jadi: coba sekali otomatis, lalu ikut sentuhan pertama apa pun. */
 function armWelcome(){
-  const go = () => { speakWelcome(); if(_spoke) off(); };
-  const evs = ["pointerdown","touchstart","keydown","scroll"];
-  const off = () => evs.forEach(e => window.removeEventListener(e, go));
+  const evs = ["pointerdown","touchend","click","keydown","scroll"];
+  const go  = () => { speakWelcome(false); };
   evs.forEach(e => window.addEventListener(e, go, {passive:true}));
-  setTimeout(speakWelcome, 350);
+  const stop = setInterval(() => {
+    if(_spoke){ evs.forEach(e => window.removeEventListener(e, go)); clearInterval(stop); }
+  }, 600);
+  setTimeout(() => clearInterval(stop), 60000);
+
+  if(window.speechSynthesis){
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = () => {};
+  }
+  setTimeout(() => speakWelcome(false), 500);
+
+  const b = document.getElementById("voiceBtn");
+  if(b) b.addEventListener("click", e => { e.stopPropagation(); speakWelcome(true); });
 }
 
 /* ============ INIT ============ */
