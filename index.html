@@ -228,7 +228,7 @@ textarea.inp{resize:vertical;line-height:1.55}
       <div class="hero-meta">
         <span><b>3</b> tabung per minggu</span>
         <span class="sep" aria-hidden="true"></span>
-        <span>Diantar atau ambil sendiri</span>
+        <span>Buka 08.00 &ndash; 17.00</span>
       </div>
     </div>
   </header>
@@ -377,7 +377,7 @@ textarea.inp{resize:vertical;line-height:1.55}
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2.6"/><path d="M8 10.5V7.4a4 4 0 0 1 8 0v3.1"/></svg>
     </div>
     <h2 style="margin:0 0 10px;font-size:1.38rem;font-weight:800;letter-spacing:-.035em;color:var(--tx)">Pemesanan sedang tutup</h2>
-    <p style="margin:0;font-size:.92rem;color:var(--tx2);font-weight:500;line-height:1.6">Order dibuka <b style="color:var(--tx)">Senin sampai Jumat jam 17.00</b>. Mampir lagi di jadwal berikutnya ya.</p>
+    <p style="margin:0;font-size:.92rem;color:var(--tx2);font-weight:500;line-height:1.6">Order dibuka <b style="color:var(--tx)">Senin sampai Jumat, jam 08.00 sampai 17.00</b>. Mampir lagi di jam buka ya.</p>
   </div>
 </div>
 
@@ -439,7 +439,17 @@ function curArea(){ return state.area || (state.pickAreaOther ? state.areaOther.
 /* Semua pembeli sama: jatahnya satu angka untuk siapa pun */
 function maxQty(){ return MAKS_TABUNG; }
 function witaNow(){ return new Date(Date.now()+8*3600000); }
-function isOpen(){ const d=witaNow(), day=d.getUTCDay(), h=d.getUTCHours(); return (day>=1&&day<=4) || (day===5&&h<17); }
+/* Jam buka toko: Senin-Jumat, 08.00 sampai 17.00 WITA.
+   Sengaja dipersempit dari aturan lama (Senin-Kamis 24 jam) karena pesanan
+   yang masuk malam hari tidak bisa dikabarkan ke WhatsApp -- PC toko sudah
+   dimatikan. Membatasi jam order di sini jauh lebih sederhana daripada
+   memindahkan pengirim WhatsApp ke luar PC. */
+const JAM_BUKA  = 8;
+const JAM_TUTUP = 17;
+function isOpen(){
+  const d = witaNow(), hari = d.getUTCDay(), jam = d.getUTCHours();
+  return hari >= 1 && hari <= 5 && jam >= JAM_BUKA && jam < JAM_TUTUP;
+}
 
 /* ============ SOUNDS ============ */
 let _ac=null, _comp=null;
@@ -689,6 +699,13 @@ function checkWindow(){
     $("#root").style.paddingBottom="0";
   }
 }
+
+/* Halaman yang dibiarkan terbuka sejak sebelum jam tutup harus ikut mengunci
+   sendiri, bukan cuma diperiksa waktu dimuat. Tanpa ini, HP yang tabnya tidak
+   pernah ditutup masih bisa mengirim jam 9 malam. Diperiksa tiap 30 detik --
+   sudah dijaga juga di send(), ini cuma supaya tampilannya jujur. */
+setInterval(checkWindow, 30000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) checkWindow(); });
 
 /* ============ SAMBUTAN SUARA ============ */
 /* Utama: file audio sambutan.mp3 (paling andal di HP).
